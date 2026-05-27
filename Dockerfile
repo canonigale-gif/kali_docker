@@ -7,8 +7,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     USERNAME=admin \
     PASSWORD=admin
 
-# ── Layer 1: Core system & utilities ──
-RUN apt-get update && \
+# ── Layer 1: Core system (wipe stale cache first) ──
+RUN rm -rf /var/lib/apt/lists/* /var/cache/apt/* && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates wget curl git \
         python3 python3-pip \
@@ -17,8 +18,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-# ── Layer 2: The scanning / recon / threat-detection arsenal ──
-RUN apt-get update && \
+# ── Layer 2: Scanners & recon tools ──
+RUN rm -rf /var/lib/apt/lists/* /var/cache/apt/* && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         fastfetch \
         clamav clamav-daemon yara rkhunter chkrootkit lynis \
@@ -26,10 +28,11 @@ RUN apt-get update && \
         nmap ncat masscan zmap \
         sqlmap nikto gobuster dirb wfuzz wpscan \
         subfinder amass assetfinder theharvester && \
+    apt-get clean && \
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/locale/* \
            /usr/share/info/* /var/log/* /var/lib/apt/lists/* /var/cache/apt/*
 
-# ── Layer 3: ttyd (web terminal) ──
+# ── Layer 3: ttyd ──
 RUN set -eux; \
     arch="$(uname -m)"; \
     case "$arch" in \
@@ -47,7 +50,7 @@ RUN useradd -ms /bin/bash ctx && \
     usermod -aG sudo ctx && \
     echo 'ctx ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# ── Layer 5: Dotfiles & fastfetch ──
+# ── Layer 5: Dotfiles ──
 USER ctx
 WORKDIR /home/ctx
 
@@ -66,10 +69,9 @@ RUN printf '%s\n' \
     'alias grep="grep --color=auto"' \
     >> /home/ctx/.bashrc
 
-# ── Layer 6: Root fallback & startup script ──
+# ── Layer 6: Startup ──
 USER root
 WORKDIR /
-RUN echo "fastfetch || true" >> /root/.bashrc
 
 RUN { \
     echo '#!/bin/bash'; \
@@ -77,7 +79,6 @@ RUN { \
     echo 'PORT="${PORT:-7681}"'; \
     echo 'USERNAME="${USERNAME:-admin}"'; \
     echo 'PASSWORD="${PASSWORD:-admin}"'; \
-    echo 'echo "Starting ttyd on port ${PORT}..."'; \
     echo 'exec /usr/local/bin/ttyd \\'; \
     echo '    --writable \\'; \
     echo '    -i 0.0.0.0 \\'; \
